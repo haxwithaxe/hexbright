@@ -29,14 +29,23 @@ either expressed or implied, of the FreeBSD Project.
 
 #include <hexbright.h>
 #include <Wire.h>
+#ifndef Debug_h
+#include "debug.h"
+#endif
+
+Debug debug(Serial);
 
 hexbright hb;
 
 #include "strobe.h"
-strobe _strobe;
+#ifndef DEBUG
+Strobe strobe(hb);
+#else
+Strobe strobe(hb, debug);
+#endif
 
 //#include "morse.h"
-//morse _morse;
+//Morse morse(strobe);
 
 #define HOLD_TIME 250 // milliseconds before going to strobe
 
@@ -48,39 +57,46 @@ int current_brightness = BRIGHTNESS_COUNT-1; // start on the last mode (off)
 //15Hz=66.6...ms
 #define STROBE_INTERVAL 67
 
+Debug debug(Serial);
+
 void setup() {
-  hb.init_hardware(); 
+	hb.init_hardware();
+#ifdef DEBUG
+	Serial.begin(9600);
+#endif
 }
 
 void loop() {
-  hb.update();
-  
-  if(hb.button_just_released() && hb.button_pressed_time()<HOLD_TIME) { 
-    // if held for less than 200 ms before release, change regular modes
-    current_brightness = (current_brightness+1)%BRIGHTNESS_COUNT;
-    set_light();
-  } else if (hb.button_pressed_time()>HOLD_TIME) {
-    if(hb.button_pressed()) {
-      // held for over HOLD_TIME ms, go to strobe
-      _strobe.set_strobe(STROBE_INTERVAL);
-    } else { // we have been doing strobe, but the light is now released
-      #ifdef RESUME_FROM_STROBE
-	  // after strobe, go to previous light level:
-      set_light();
-      #else
-      // after strobe, shutdown
-      current_brightness = 0;
-      hb.shutdown();
-      #endif
-    }
-  }
-  hb.print_charge(GLED);
+	hb.update();
+
+	if(hb.button_just_released() && hb.button_pressed_time()<HOLD_TIME) { 
+		// if held for less than 200 ms before release, change regular modes
+		debug.print("click");
+		current_brightness = (current_brightness+1)%BRIGHTNESS_COUNT;
+		set_light();
+	} else if (hb.button_pressed_time()>HOLD_TIME) {
+		if(hb.button_pressed()) {
+			debug.print("holding");
+			// held for over HOLD_TIME ms, go to strobe
+			strobe.set_strobe(STROBE_INTERVAL);
+		} else { // we have been doing strobe, but the light is now released
+#ifdef RESUME_FROM_STROBE
+			// after strobe, go to previous light level:
+			set_light();
+#else
+			// after strobe, shutdown
+			current_brightness = 0;
+			hb.shutdown();
+#endif
+		}
+	}
+	hb.print_charge(GLED);
 }
 
 void set_light() {
-  if(brightness[current_brightness] == 0) {
-    hb.shutdown();
-  } else {
-    hb.set_light(CURRENT_LEVEL, brightness[current_brightness], 50);
-  }
+	if(brightness[current_brightness] == 0) {
+		hb.shutdown();
+	} else {
+		hb.set_light(CURRENT_LEVEL, brightness[current_brightness], 50);
+	}
 }
