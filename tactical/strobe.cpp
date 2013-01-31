@@ -1,34 +1,42 @@
 #include <hexbright.h>
 #include "strobe.h"
 
-Strobe::Strobe(){};
+Strobe::Strobe(hexbright& hbor, Debug& debugo):
+	debug(debugo),
+	hbo(hbor)
+{
+	((void)0); //noop
+};
 
-Strobe::Strobe(hexbright& hbor) {
-	hbo = hbor;
+void Strobe::_set_on(unsigned long start_lvl, unsigned long end_lvl, unsigned long period) {
+	hbo.set_light(start_lvl, end_lvl, period);
 }
-Strobe::Strobe(hexbright& hbor, Debug& debugo){
-	debug = debugo;
-	hbo = hbor;
-}
+void Strobe::on(unsigned long lvl) { _set_on(CURRENT_LEVEL, lvl, 20); };
 
-void Strobe::_pulse(unsigned long lvl, unsigned long interval) {
+void Strobe::_set_off(unsigned long lvl, unsigned long period) {
+	hbo.set_light(lvl, 0, period);
+}
+void Strobe::off() { _set_off(CURRENT_LEVEL, 20); };
+
+void Strobe::pulse(unsigned long lvl, unsigned long interval) {
 	debug.print("strobe pulse");
-	hbo.set_light(CURRENT_LEVEL, lvl, 0);
+	on(lvl);
 	delay(interval);
-	hbo.set_light(CURRENT_LEVEL, 0, 20);
+	off();
+};
+
+void Strobe::_flash(unsigned long lvl) {
+	hbo.set_light(lvl, 0, 20); // and pulse (going from max to min over 20 milliseconds)
+	/* note: because of the refresh rate, it's more like 'go from max brightness on high
+	 * to max brightness on low to off.
+	 */
 }
 
-void Strobe::_set_strobe(unsigned int interval) {
+void Strobe::strobe(unsigned int interval, unsigned long* flash_time) {
 	debug.print("strobe strobe");
-	unsigned long flash_time = millis();
-	if(flash_time+interval<millis()) { // flash every <interval> milliseconds
-		flash_time = millis(); // reset flash_time
-		hbo.set_light(MAX_LEVEL, 0, 20); // and pulse (going from max to min over 20 milliseconds)
-		/* note: because of the refresh rate, it's more like 'go from max brightness on high
-		 * to max brightness on low to off.
-		 */
-	}
-}
-
-void Strobe::set_strobe(unsigned int interval) { _set_strobe(interval); }
-void Strobe::pulse(unsigned long lvl, unsigned long interval) { _pulse(lvl, interval); }
+	if(*flash_time+interval<millis()) { // flash every <interval> milliseconds
+		debug.print("flash");
+		*flash_time = millis(); // reset flash_time
+		_flash(MAX_LEVEL);
+	};
+};

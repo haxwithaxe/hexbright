@@ -7,8 +7,8 @@
 Morse::Morse(Strobe& stb):
 	strobe(stb)
 {
-	;
-}
+	((void)0);
+};
 
 void Morse::to_morse(char ch) {
 	unsigned int m_ch = ascii_to_morse(ch);
@@ -22,14 +22,18 @@ void Morse::to_morse(char ch) {
 			else strobe.pulse(MAX_LEVEL, TAP_FREQ);
 			// delay for key return
 			delay(TAP_FREQ);
-		}
-	}
-}
+		};
+	};
+};
 
 void Morse::send_morse(char* message) {
 	for (unsigned int i = 0; i < sizeof(message); i++) {
 		to_morse(message[i]);
-	}
+	};
+};
+
+void Morse::sos() {
+	send_morse("SOS");
 }
 
 /* ASCII to Morse mapper
@@ -104,5 +108,6 @@ unsigned int Morse::ascii_to_morse(char ch) {
 		case '8': return 0x0507; // 8 ---..
 		case '9': return 0x050F; // 9 ----.
 		default: return 0x0000; // null
-	}
-}
+	};
+};
+

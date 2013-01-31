@@ -9,11 +9,13 @@ class Debug {
 		{
 			out.println("debug enabled");
 		};
-		void print(char* msg) {
+		void print(const char* msg) {
 #ifdef DEBUG
 			out.println(msg);
+#else
+			((void)0); //noop
 #endif
-		}
-}
+		};
+};
 
 #endif

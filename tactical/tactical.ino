@@ -29,23 +29,20 @@ either expressed or implied, of the FreeBSD Project.
 
 #include <hexbright.h>
 #include <Wire.h>
-#ifndef Debug_h
 #include "debug.h"
-#endif
 
 Debug debug(Serial);
 
 hexbright hb;
 
 #include "strobe.h"
-#ifndef DEBUG
-Strobe strobe(hb);
-#else
 Strobe strobe(hb, debug);
-#endif
 
-//#include "morse.h"
-//Morse morse(strobe);
+#include "morse.h"
+Morse morse(strobe);
+
+#include "tap.h"
+Tap tap_3(hb, 3, 5, &morse.sos);
 
 #define HOLD_TIME 250 // milliseconds before going to strobe
 
@@ -56,8 +53,6 @@ int current_brightness = BRIGHTNESS_COUNT-1; // start on the last mode (off)
 #define RESUME_FROM_STROBE
 //15Hz=66.6...ms
 #define STROBE_INTERVAL 67
-
-Debug debug(Serial);
 
 void setup() {
 	hb.init_hardware();
@@ -78,7 +73,8 @@ void loop() {
 		if(hb.button_pressed()) {
 			debug.print("holding");
 			// held for over HOLD_TIME ms, go to strobe
-			strobe.set_strobe(STROBE_INTERVAL);
+			static unsigned long flash_time = millis();
+			strobe.strobe(STROBE_INTERVAL, &flash_time);
 		} else { // we have been doing strobe, but the light is now released
 #ifdef RESUME_FROM_STROBE
 			// after strobe, go to previous light level:
@@ -90,6 +86,7 @@ void loop() {
 #endif
 		}
 	}
+	tap_3.upkeep();
 	hb.print_charge(GLED);
 }
 
