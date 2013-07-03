@@ -1,0 +1,3 @@
+[submodule "hexbright"]
+	path = hexbright
+	url = https://github.com/dhiltonp/hexbright.git

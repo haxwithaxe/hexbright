@@ -3,7 +3,7 @@
 #include <avr/interrupt.h>
 
 /* Button Press Interupt
- * PCINT2_vect is the vector of the PD0..7 pins of which the button is #2
+ * PCINT2_vect is the vector of the PD0..7 pins of which the button is PD2
  * http://hackedgadgets.com/2010/09/08/how-to-use-external-interrupts-on-an-atmega168/
  * http://www.protostack.com/blog/2010/09/external-interrupts-on-an-atmega168/
  * http://arduino.cc/en/Hacking/PinMapping168
@@ -30,7 +30,7 @@ void pwr_suspend()
   sleep_enable();
 
   // Power Down Modules?
-  power_all_disable()
+  power_all_disable();
   // OR
   // Disable ADC?
   ADCSRA &= ~(1 << ADEN);
