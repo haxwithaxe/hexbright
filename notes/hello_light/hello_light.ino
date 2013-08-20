@@ -27,13 +27,13 @@ Copyright (c) 2012, "David Hilton" <dhiltonp@gmail.com>
  either expressed or implied, of the FreeBSD Project.
  */
 
+#include <avr/io.h>
 #include <avr/power.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 #include <hexbright.h>
 #include <Wire.h>
-
-#define DPIN_RLED_SW 2
+#include "pins.h"
 
 #define OFF_MODE 0
 #define ON_MODE 1
@@ -52,18 +52,15 @@ int blink_count = 1;
 hexbright hb;
 
 void on_wake();
-void pwr_suspend();
-void blink(int brightness, int rate, int count);
+void pre_suspend();
+void suspend();
+void tail_off();
+void light_off();
 void lights_out();
 
 void setup() {
-  hb.init_hardware();
-  GICR |= ( 1 < < INT2);
-  // Signal change triggers interrupt
-  MCUCR |= ( 1 << ISC00);
-  MCUCR |= ( 0 << ISC01);
-  EICRA = (1<<ISC01); //Interrupt on falling edge
-  EIMSK = (1<<INT2);
+	hb.init_hardware();
+	pre_suspend();
 } 
 
 void loop() {
@@ -82,9 +79,8 @@ void loop() {
   }
   if(hb.button_pressed_time()>700) { // if held for over 700 milliseconds (whether or not it's been released), go to SLEEP mode
     mode = SLEEP_MODE;
-    lights_out();
-    delay(50);
-    pwr_suspend();
+    pre_suspend();
+    suspend();
 #if (DEBUG!=DEBUG_OFF)
     Serial.println("Awakened.");
 #endif
@@ -106,75 +102,75 @@ void loop() {
 
 void on_wake()
 {
-  //hb.init_hardware();
-  if (mode == SLEEP_MODE)
-    blink(MAX_LOW_LEVEL, 500, 10);
+	// if mode set to SLEEP_MODE and the tail button was just pressed or is pressed
+	if (mode == SLEEP_MODE && digitalReadFast(DPIN_RLED_SW) > 0)
+	{
+		hb.init_hardware();
+		hb.update();
+	}
 }
 
-void blink(int brightness, int rate, int count)
+void pre_suspend()
 {
-  for(int i=0;i>count;i++)
-  {
-    hb.update();
-    hb.set_light(CURRENT_LEVEL, brightness, NOW);
-    delay(990);
-    hb.set_light(CURRENT_LEVEL, OFF_LEVEL, NOW);
-    delay(rate);
-  }
+	/*
+	 * Run in setup and before suspend
+	 * http://www.atmel.com/Images/doc8468.pdf
+	 * section 3.4
+	 */
+	
+	//Enable pull-up on PORTD BIT0 (INT0) to connect to switch SW1
+	PORTD=(1<<PD0);
+
+	//Configure INT0 to sense rising edge
+	EICRA=(EICRA&(~(1<<ISC01|1<<ISC00)))|(1<<ISC01|1<<ISC00);
+
+	//Enable INT0
+	EIMSK|=(1<<INT0);
+
+	//Set global interrupt enable bit
+	sei();
+
+	//Set sleep mode to Power-Down mode
+	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	sleep_enable();
+
 }
 
-/* Hibernate the MCU
- * http://www.nongnu.org/avr-libc/user-manual/group__avr__power.html
- */
-void pwr_suspend()
+void suspend()
 {
-  // Power-down board
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	//Turn main light off
+	
+	//Turn tail lights off
 
-  cli();
+	//Enter into sleep mode
+	sleep_cpu();
+}
 
-  // Set Sleep Enabled Bit
-  sleep_enable();
+void tail_off()
+{
+	// DPIN_RLED_SW
+	digitalWriteFast(DPIN_RLED_SW, LOW);
+	pinModeFast(DPIN_RLED_SW, INPUT);
+	// DPIN_GLED
+	digitalWriteFast(DPIN_GLED, LOW);
+}
 
-  // Power Down Modules?
-  power_all_disable();
-  // OR
-  // Disable ADC?
-  //ADCSRA &= ~(1 << ADEN);
-
-  // Power down functions
-  PRR = 0xFF;
-
-#ifdef sleep_bod_disable()
-  // Disable BOD (Brown Out Detector)
-  sleep_bod_disable();
-#endif
-
-  // Enable Interrupts (sets global interrupt mask)
-  sei();
-
-  // Sleep
-  sleep_cpu();
-
-  //WAKING HERE
-
-  // Clear Sleep Enabled Bit
-  sleep_disable();
-
-  // Enable Interrupts (sets global interrupt mask)
-  sei();
+void light_off()
+{
+	pinModeFast(DPIN_PWR, OUTPUT);
+	digitalWriteFast(DPIN_PWR, LOW);
+	digitalWriteFast(DPIN_DRV_MODE, LOW);
+	analogWrite(DPIN_DRV_EN, 0);
 }
 
 void lights_out()
 {
   // Ensure the main light is off
-  hb.set_light(CURRENT_LEVEL, OFF_LEVEL, NOW);
+  light_off();
   // Ensure the tail lights are off
-  hb.set_led(GLED, 0, 0,0);
-  hb.set_led(RLED, 0, 0,0);
+  tail_off();
   // Ensure our interrupt source is readable
-  pinMode(DPIN_RLED_SW, INPUT);
-  digitalWrite(DPIN_RLED_SW, HIGH);
+  pinModeFast(DPIN_RLED_SW, INPUT);
 }
 
 /* Button Press Interupt
@@ -183,7 +179,7 @@ void lights_out()
  * http://www.protostack.com/blog/2010/09/external-interrupts-on-an-atmega168/
  * http://arduino.cc/en/Hacking/PinMapping168
  */
-ISR(INT2_vect)
+ISR(INT0_vect)
 {
   on_wake();
 }
