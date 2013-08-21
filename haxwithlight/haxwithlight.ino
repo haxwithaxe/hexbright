@@ -35,58 +35,79 @@ Copyright (C) 2013 haxwithaxe
 
 #include <Wire.h>
 
+#include <stdtype.h>
+
 #define OFF_MODE 0
 #define BLINKY_MODE 1
 #define CYCLE_MODE 2
+#define LOCK_MODE 8
+#define DAZZLE_MODE 9
 
+// Light Level Bounds
 #define LEVEL_MAX 1000
 #define LEVEL_MIN 1
 #define DRV_MIN 150
 #define DRV_MAX 255
+
+// Number of light levels
 #define LEVELS_LEN 5
+
+// Button Press Thresholds
 #define MIN_PRESSED_MS 200
 #define PRESSED_MS 600
 #define HELD_MS 700
+
+// Button State
+#define PRESSED 10
+#define HELD 11
 
 int cycle_level_index = 0;
 
 hexbright hb;
 
-struct LightMode_t {
-	int light;
-	int driver;
-	LightMode_t(): light(0), driver(0) {};
-	LightMode_t(int l, int d): light(l), driver(d){};
-};
-
 int mid_drv = ((DRV_MAX-DRV_MIN)/(LEVELS_LEN-1))+DRV_MIN;
 int upper_mid_drv = ((DRV_MAX-DRV_MIN)/(LEVELS_LEN-1))*2+DRV_MIN;
 
-LightMode_t cycle_levels[LEVELS_LEN] = {
-	LightMode_t(LEVEL_MIN, DRV_MIN),
-	LightMode_t(LEVEL_MAX/(LEVELS_LEN-1), mid_drv),
-	LightMode_t((LEVEL_MAX/(LEVELS_LEN-1))*2, upper_mid_drv),
-	LightMode_t(LEVEL_MAX, DRV_MAX),
-    LightMode_t(OFF_LEVEL, 0)
+uint8_t cycle_levels[LEVELS_LEN] = {
+	LEVEL_MIN,
+	LEVEL_MAX/(LEVELS_LEN-1),
+	(LEVEL_MAX/(LEVELS_LEN-1))*2,
+	LEVEL_MAX,
+    OFF_LEVEL
 };
 
 struct State_t {
-	int btn_mode;
-	int mode;
-	LightMode_t level;
-	State_t():btn_mode(0), mode(0) {};
-	State_t(int b, int m):btn_mode(b), mode(m) {};
+	uint8_t btn_mode;
+	uint8_t act_mode;
+	int _level;
+	int last_level;
+	unsigned long transition_rate;
+
+	State_t(): btn_mode(0), act_mode(OFF_MODE), level(OFF_LEVEL), last_level(OFF_LEVEL), transition_rate(NOW) {};
+
+	State_t(uint8_t b, uint8_t m, int l):btn_mode(b), act_mode(m), level(l), last_level(OFF_LEVEL), transition_rate(NOW) {};
+
+	void level(int new_level) {
+		last_level = _level;
+		_level = new_level;
+	}
+	int level() { return _level; }
 };
 
-State_t state(0, 0);
+State_t state();
 
 void setup() {
   hb.init_hardware();
-} 
+}
 
 void loop() {
 	hb.update();
+	collect_state();
+	reconsile_state();
+	upkeep();
+}
 
+void collect_state() {
 	// Button actions to recognize, one-time actions to take as a result
 	if(hb.button_just_released() && hb.button_pressed_time()>MIN_PRESSED_MS && hb.button_pressed_time()<PRESSED_MS) {
 		state.btn_mode = PRESSED;
@@ -103,39 +124,62 @@ void loop() {
 			break;
 	}
 	
-
-	// Actions over time for a given mode
-	switch (mode) {
-		case CYCLE_MODE:
-			if(!hb.printing_number()) hb.print_number(hb.get_fahrenheit());
+	switch (state.act_mode) {
+		case OFF_MODE:
 			break;
-		case OFF_MODE: // charging, or turning off
-			if(!hb.printing_number()) hb.print_charge(GLED);
+		case BLINKY_MODE:
+			break;
+		case CYCLE_MODE:
+			break;
+		case LOCK_MODE:
+			break;
+		case DAZZLE_MODE:
 			break;
 	}
 }
 
 int cycle_brightness(int index) {
-	if (index >= LEVELS_LEN-1) {
-		set_off();
-		index = 0;
-	} else {
-		index++;
-		set_light(cycle_levels[index].light, cycle_levels[index].driver);
-	}
+	state.level(cycle_levels[index]);
+    index++;
+	if (index > LEVELS_LEN-1) index = 0;
 	return index;
 }
 
-void blink(unsigned long *last_blink_on, unsigned long on_delta, unsigned long off_delta, int rate) {
-	if (millis() - *last_blink_on > delta) {
-		state.levels.light = CURRENT_LEVEL;
+void set_blink(unsigned long *last_blink_on, unsigned long on_delta, unsigned long off_delta, unsigned long transition_rate) {
+	// time until the light should be set back to `on` sum(deltas)+2*rate of transition
+	unsigned long total_off_delta = on_delta + off_delta + transition_rate*2
+	state.act_mode = BLINK_MODE
+	if (millis() - *last_blink_on > on_delta && CURRENT_LEVEL != OFF_LEVEL) {
+		state.level(OFF_LEVEL);
+		state.last_blink = millis();
+		state.transition_rate = transition_rate;
 
-		*last_blink_on = millis();
+	} else if (millis() - state.last_blink > total_off_delta && CURRENT_LEVEL == OFF_LEVEL) {
+		state.level(state.last_level);
+		state.transition_rate = transition_rate;
 	}
 }
 
-void set_light(int light, int driver) {
-	hb.set_light(CURRENT_LEVEL, light, driver);
+void upkeep() {
+    // Actions over time for a given mode
+    switch (state.act_mode) {
+        case CYCLE_MODE:
+            if(!hb.printing_number()) hb.print_number(hb.get_fahrenheit());
+            break;
+        case OFF_MODE: // charging, or turning off
+            if(!hb.printing_number()) hb.print_charge(GLED);
+            break;
+    }
+}
+
+void reconsile_state() {
+	if (state.level != CURRENT_LEVEL) {
+		hb.set_light(CURRENT_LEVEL, state.level, state.transition_rate);
+	}
+}
+
+void set_light(int light) {
+	hb.set_light(CURRENT_LEVEL, light, NOW);
 }
 
 void set_off() {
