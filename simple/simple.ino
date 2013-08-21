@@ -1,114 +1,115 @@
 /*
-Copyright (c) 2012, "David Hilton" <dhiltonp@gmail.com>
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met: 
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer. 
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution. 
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-The views and conclusions contained in the software and documentation are those
-of the authors and should not be interpreted as representing official policies, 
-either expressed or implied, of the FreeBSD Project.
-
 Copyright (C) 2013 haxwithaxe
-- modified for less complexity
-- added lower bound on button press time to help prevent accidentally turning on the light.
+Rewrite of functional.ino by "David Hilton" <dhiltonp@gmail.com>
+License: FreeBSD (pending research on compatibility with MIT)
+<insert license text here>
 */
 
 #include <hexbright.h>
 
 #include <Wire.h>
 
+// Light is off
 #define OFF_MODE 0
+
+// Light blinks at a regular interval
+// NOT IMPLEMENTED
 #define BLINKY_MODE 1
+
+// Light cycles between brightnesses per button click
 #define CYCLE_MODE 2
 
+// Light "strobes" at random intervals and random intensities within a certain range
+// NOT IMPLEMENTED
+#define DAZZLE_MODE 9
+
+//Maximum light level value (probably should use the one in hb)
 #define LEVEL_MAX 1000
-#define LEVEL_MIN 1
-#define DRV_MIN 150
-#define DRV_MAX 255
-#define LEVELS_LEN 5
+
+// Minimum light level value for CYCLE_MODE
+#define LEVEL_MIN 150
+
+#define LEVELS_LEN 4
 #define MIN_PRESSED_MS 200
 #define PRESSED_MS 600
 #define HELD_MS 700
+#define TRANSITION_MS 0
+
+// Light levels for CYCLE_MODE
+#define LEVELS_LEN 4
+
+int levels[LEVELS_LEN] = {
+	LEVEL_MIN,
+	LEVEL_MAX/(LEVELS_LEN-1), /* 1/LEVELS_LEN power */
+	(LEVEL_MAX/(LEVELS_LEN-1))*2, /* 2*previous power */
+	LEVEL_MAX /* full power */
+};
 
 int mode = 0;
-int brightness_level = 0;
+int brightness_index = 0;
 
 hexbright hb;
-
-struct LightMode_t {
-	int light;
-	int driver;
-	LightMode_t(): light(0), driver(0) {};
-	LightMode_t(int l, int d): light(l), driver(d){};
-};
-
-int mid_drv = ((DRV_MAX-DRV_MIN)/(LEVELS_LEN-1))+DRV_MIN;
-int upper_mid_drv = ((DRV_MAX-DRV_MIN)/(LEVELS_LEN-1))*2+DRV_MIN;
-
-LightMode_t levels[LEVELS_LEN] = {
-	LightMode_t(LEVEL_MIN, DRV_MIN),
-	LightMode_t(LEVEL_MAX/(LEVELS_LEN-1), mid_drv),
-	LightMode_t((LEVEL_MAX/(LEVELS_LEN-1))*2, upper_mid_drv),
-	LightMode_t(LEVEL_MAX, DRV_MAX),
-    LightMode_t(OFF_LEVEL, 0)
-};
 
 void setup() {
   hb.init_hardware();
 } 
 
 void loop() {
-  hb.update();
+	// update hexbright lib state awareness
+	hb.update();
 
-  //// Button actions to recognize, one-time actions to take as a result
-  if(hb.button_just_released()) {
-    if(hb.button_pressed_time()>MIN_PRESSED_MS && hb.button_pressed_time()<PRESSED_MS) {
-	  if (brightness_level == LEVELS_LEN-1) {
-		  set_off();
-	  } else {
-		  mode = CYCLE_MODE;
-	      brightness_level++;
-		  hb.set_light(CURRENT_LEVEL, levels[brightness_level].light, levels[brightness_level].driver);
-	  }
-    }
-  }
-  if(hb.button_pressed_time()>HELD_MS) { // if held for over HELD_MS milliseconds (whether or not it's been released), go to OFF mode
-    set_off();
-  }
+	/* State based actions */
+	// Button State
+	if(hb.button_just_released()) { //If button pressed and released
+		/* CYCLE_MODE
+		 * If button held for less than PRESSED_MS but more than MIN_PRESSED_MS enter cycle mode and cycle through them
+		 *	the bottom cut off *helps* prevent accidentally turning on the light in a pocket, etc.
+		 *	the MIN_PRESSED_MS and PRESSED_MS likely need tuning per individual.
+		 */
+		if(hb.button_pressed_time()>MIN_PRESSED_MS && hb.button_pressed_time()<PRESSED_MS) {
+			if (brightness_index >= LEVELS_LEN-1) { // hit max index, reset to `off` state
+				set_off();
+			} else {
+				mode = CYCLE_MODE;
+				brightness_index++;
+				set_light_level(levels[brightness_index]);
+			}
+		}
+	}
 
-  //// Actions over time for a given mode
-  if (mode == CYCLE_MODE) { // print the current flashlight temperature
-    if(!hb.printing_number()) {
-      hb.print_number(hb.get_fahrenheit());
-    }
-  } else if (mode == OFF_MODE) { // charging, or turning off
-    if(!hb.printing_number()) {
-      hb.print_charge(GLED);
-    }
+	/* OFF_MODE
+	 * If held for over HELD_MS milliseconds (whether or not it's been released), then turn off the light.
+	 */
+	if(hb.button_pressed_time()>HELD_MS) {
+		set_off();
+	}
+
+  // Do stuff that happens every cycle.
+  upkeep();
+}
+
+void upkeep() {
+  switch (mode){
+	case CYCLE_MODE:
+		// Print the current flashlight temperature (to serial I think).
+		if(!hb.printing_number()) hb.print_number(hb.get_fahrenheit());
+		break;
+	case OFF_MODE:
+		// Indicate charging with the tail light if battery is charging or charged.
+	    if(!hb.printing_number()) hb.print_charge(GLED);
+		break;
   }
+}
+
+void set_light_level(int level) {
+	hb.set_light(CURRENT_LEVEL, level, TRANSITION_MS);
 }
 
 void set_off() {
 	mode = OFF_MODE;
-	hb.set_light(CURRENT_LEVEL, OFF_LEVEL, NOW);
-	// reset state
-	brightness_level = 0;
+	set_light_level(OFF_LEVEL);
+	/* Reset brightness_index even if mode != CYCLE_MODE.
+	 *	If not then CYCLE_MODE would possibly begin at a different level than user expects.
+	 */
+	brightness_index = 0;
 }
