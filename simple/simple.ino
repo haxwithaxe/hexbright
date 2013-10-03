@@ -30,7 +30,7 @@ License: FreeBSD (pending research on compatibility with MIT)
 #define LEVEL_MIN 150
 
 #define LEVELS_LEN 4
-#define MIN_PRESSED_MS 200
+#define MIN_PRESSED_MS 100
 #define PRESSED_MS 600
 #define HELD_MS 700
 #define TRANSITION_MS 0
@@ -40,8 +40,8 @@ License: FreeBSD (pending research on compatibility with MIT)
 
 int levels[LEVELS_LEN] = {
 	LEVEL_MIN,
-	LEVEL_MAX/(LEVELS_LEN-1), /* 1/LEVELS_LEN power */
-	(LEVEL_MAX/(LEVELS_LEN-1))*2, /* 2*previous power */
+	(LEVEL_MAX-LEVEL_MIN)/4, /* 1/LEVELS_LEN power */
+	(LEVEL_MAX-LEVEL_MIN)/2, /* 2*previous power */
 	LEVEL_MAX /* full power */
 };
 
@@ -91,8 +91,6 @@ void loop() {
 void upkeep() {
   switch (mode){
 	case CYCLE_MODE:
-		// Print the current flashlight temperature (to serial I think).
-		if(!hb.printing_number()) hb.print_number(hb.get_fahrenheit());
 		break;
 	case OFF_MODE:
 		// Indicate charging with the tail light if battery is charging or charged.
