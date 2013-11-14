@@ -1,3 +1,9 @@
+/*
+Copyright (c) 2013, haxwithaxe <me@haxwithaxe.net>
+All rights reserved.
+Licensed under GPLv3 (see LICENSE file in repository root)
+*/
+
 #ifndef HEXBRIGHT_Strobe_h
 #define HEXBRIGHT_Strobe_h
 #include "debug.h"

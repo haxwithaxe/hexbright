@@ -1,3 +1,10 @@
+/*
+Copyright (c) 2013, haxwithaxe <me@haxwithaxe.net>
+All rights reserved.
+Licensed under GPLv3 (see LICENSE file in repository root)
+*/
+
+
 #include <Arduino.h>
 #include <hexbright.h>
 #include "strobe.h"

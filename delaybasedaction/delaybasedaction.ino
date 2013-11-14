@@ -1,8 +1,7 @@
 /*
 Copyright (C) 2013 haxwithaxe
 Rewrite of functional.ino by "David Hilton" <dhiltonp@gmail.com>
-License: FreeBSD (pending research on compatibility with MIT)
-<insert license text here>
+Licensed under GPLv3 (see LICENSE file in repository root)
 */
 
 #include <hexbright.h>

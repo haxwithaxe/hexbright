@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2013, haxwithaxe <me@haxwithaxe.net>
+All rights reserved.
+Licensed under GPLv3 (see LICENSE file in repository root)
+*/
 #define TAP_FLOOR 220
 #include <Wire.h>
 #include <hexbright.h>

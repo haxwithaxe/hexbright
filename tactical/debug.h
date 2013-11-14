@@ -1,3 +1,7 @@
+/* Debug utility
+Copyright (c) 2013, haxwithaxe <me@haxwithaxe.net>
+All rights reserved.
+*/
 #ifndef Debug_h
 #define Debug_h
 
